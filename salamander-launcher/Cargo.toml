@@ -1,0 +1,10 @@
+[package]
+name = "salamander-launcher"
+version = "0.6.0-alpha.1"
+edition = "2021"
+rust-version = "1.85"
+license = "GPL-3.0-or-later"
+
+[[bin]]
+name = "salamander"
+path = "src/main.rs"

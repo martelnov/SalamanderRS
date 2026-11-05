@@ -12,7 +12,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
-version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1 | sed 's/-alpha\./~alpha./')
 sodium=${SODIUM_STATIC_DIR:-}
 if [ -z "$sodium" ]; then
     for dir in /usr/lib64 /usr/lib/x86_64-linux-gnu; do
@@ -23,7 +23,7 @@ fi
 
 target=${CARGO_TARGET_DIR:-target}/rpm-build
 # shellcheck disable=SC2086
-SALAMANDER_SODIUM_STATIC=$sodium CARGO_TARGET_DIR=$target cargo build --release ${CARGO_FLAGS:-}
+SALAMANDER_SODIUM_STATIC=$sodium CARGO_TARGET_DIR=$target cargo build --release -p salamander-rs -p salamander-tui -p salamander-launcher ${CARGO_FLAGS:-}
 binary=$target/release/salamander-rs
 if readelf -d "$binary" | grep -q 'libsodium'; then
     echo "libsodium není přilinkována staticky" >&2
@@ -34,6 +34,8 @@ work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 mkdir -p "$work/SOURCES"
 strip -o "$work/SOURCES/salamander-rs" "$binary"
+strip -o "$work/SOURCES/salamander-rs-tui" "$target/release/salamander-rs-tui"
+strip -o "$work/SOURCES/salamander" "$target/release/salamander"
 cp assets/cz.k4.salamander-rs.desktop assets/salamander-rs.svg LICENSE README.md "$work/SOURCES/"
 ${RPMBUILD:-rpmbuild} -bb \
     --define "_topdir $work" \

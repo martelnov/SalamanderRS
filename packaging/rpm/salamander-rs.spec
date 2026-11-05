@@ -38,6 +38,8 @@ servery přes SSH/SFTP se šifrovaným trezorem hesel a auditním logem.
 
 %install
 install -Dm0755 %{_sourcedir}/salamander-rs %{buildroot}%{_bindir}/salamander-rs
+install -Dm0755 %{_sourcedir}/salamander-rs-tui %{buildroot}%{_bindir}/salamander-rs-tui
+install -Dm0755 %{_sourcedir}/salamander %{buildroot}%{_bindir}/salamander
 install -Dm0644 %{_sourcedir}/cz.k4.salamander-rs.desktop %{buildroot}%{_datadir}/applications/cz.k4.salamander-rs.desktop
 install -Dm0644 %{_sourcedir}/salamander-rs.svg %{buildroot}%{_datadir}/icons/hicolor/scalable/apps/salamander-rs.svg
 install -Dm0644 %{_sourcedir}/LICENSE %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
@@ -45,6 +47,8 @@ install -Dm0644 %{_sourcedir}/README.md %{buildroot}%{_docdir}/%{name}/README.md
 
 %files
 %{_bindir}/salamander-rs
+%{_bindir}/salamander-rs-tui
+%{_bindir}/salamander
 %{_datadir}/applications/cz.k4.salamander-rs.desktop
 %{_datadir}/icons/hicolor/scalable/apps/salamander-rs.svg
 %license %{_datadir}/licenses/%{name}/LICENSE

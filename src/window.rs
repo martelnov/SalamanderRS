@@ -2355,7 +2355,7 @@ impl OperationUi {
             button.connect_clicked(move |_| {
                 if let Some(prompt) = weak_prompt.upgrade() {
                     if !prompt.answered.replace(true) {
-                        let _ = replies.send(action);
+                        let _ = replies.send(action.clone());
                     }
                     prompt.window.close();
                 }

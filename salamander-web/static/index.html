@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>SalamanderRS Web — správce souborů</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand"><span class="brand-mark" aria-hidden="true">S<span>R</span></span><div><h1>Salamander<span>RS</span> <b>WEB</b></h1><p>Dvojpanelový správce souborů</p></div></div>
+      <div class="header-actions">
+        <span class="status-badge" id="mode-badge"><span class="status-dot"></span><span id="mode-label">Lokální test · pouze čtení</span></span>
+        <button id="refresh" class="header-button" type="button" title="Obnovit (Ctrl+R)">⟳ <span>Obnovit</span></button>
+      </div>
+    </header>
+
+    <div class="workspace" id="workspace">
+      <section class="pane active-pane" id="pane-0" aria-label="Levý panel">
+        <div class="pane-header">
+          <div class="pane-meta"><span class="pane-caption">LEVÝ PANEL</span><span class="pane-count" id="count-0">—</span></div>
+          <div class="pane-controls"><label class="root-label" for="root-0">Strom</label><select id="root-0" aria-label="Strom levého panelu"><option value="data">DATA</option><option value="models">MODELS</option></select><button id="up-0" class="icon-button" title="O úroveň výš (Backspace)" type="button">↑</button></div>
+          <div class="path-wrap"><span class="path-icon">⌁</span><input id="path-0" class="path-field" spellcheck="false" autocomplete="off" aria-label="Relativní cesta v levém panelu" value="/"/><span id="loading-0" class="loading" aria-hidden="true"></span></div>
+        </div>
+        <div class="file-list" id="files-0" role="listbox" aria-label="Soubory levého panelu"></div>
+        <div class="pane-footer"><span id="summary-0">Načítám…</span><span id="selection-0">—</span></div>
+        <div class="storage-footer" aria-label="Dostupné místo pro zápis v aktuálním adresáři">
+          <div class="storage-line" id="disk-0">Zjišťuji dostupné místo…</div>
+          <progress class="storage-progress" id="disk-bar-0" value="0" max="100" aria-label="Obsazenost svazku" hidden></progress>
+          <div class="quota-line" id="quota-0"></div>
+        </div>
+      </section>
+
+      <div class="pane-divider" aria-hidden="true"></div>
+
+      <section class="pane" id="pane-1" aria-label="Pravý panel">
+        <div class="pane-header">
+          <div class="pane-meta"><span class="pane-caption">PRAVÝ PANEL</span><span class="pane-count" id="count-1">—</span></div>
+          <div class="pane-controls"><label class="root-label" for="root-1">Strom</label><select id="root-1" aria-label="Strom pravého panelu"><option value="data">DATA</option><option value="models" selected>MODELS</option></select><button id="up-1" class="icon-button" title="O úroveň výš (Backspace)" type="button">↑</button></div>
+          <div class="path-wrap"><span class="path-icon">⌁</span><input id="path-1" class="path-field" spellcheck="false" autocomplete="off" aria-label="Relativní cesta v pravém panelu" value="/"/><span id="loading-1" class="loading" aria-hidden="true"></span></div>
+        </div>
+        <div class="file-list" id="files-1" role="listbox" aria-label="Soubory pravého panelu"></div>
+        <div class="pane-footer"><span id="summary-1">Načítám…</span><span id="selection-1">—</span></div>
+        <div class="storage-footer" aria-label="Dostupné místo pro zápis v aktuálním adresáři">
+          <div class="storage-line" id="disk-1">Zjišťuji dostupné místo…</div>
+          <progress class="storage-progress" id="disk-bar-1" value="0" max="100" aria-label="Obsazenost svazku" hidden></progress>
+          <div class="quota-line" id="quota-1"></div>
+        </div>
+      </section>
+    </div>
+
+    <div class="command-bar">
+      <button class="command-button" id="rename-button" type="button" disabled><kbd>F2</kbd> Přejmenovat</button>
+      <button class="command-button" id="viewer-button" type="button"><kbd>F3</kbd> Zobrazit</button>
+      <button class="command-button" id="editor-button" type="button" disabled><kbd>F4</kbd> Textový editor</button>
+      <button class="command-button" id="new-file-button" type="button" disabled><kbd>Shift+F4</kbd> Nový soubor</button>
+      <button class="command-button" id="copy-button" type="button" disabled><kbd>F5</kbd> Kopírovat</button>
+      <button class="command-button" id="move-button" type="button" disabled><kbd>F6</kbd> Přesunout</button>
+      <button class="command-button" id="mkdir-button" type="button" disabled><kbd>F7</kbd> Nový adresář</button>
+      <button class="command-button danger-button" id="delete-button" type="button" disabled><kbd>F8</kbd> Smazat</button>
+      <button class="command-button" id="zip-button" type="button" disabled>ZIP vytvořit →</button>
+      <button class="command-button" id="unzip-button" type="button" disabled>ZIP rozbalit →</button>
+      <button class="command-button" id="upload-button" type="button" disabled>↑ Nahrát z PC</button>
+      <button class="command-button" id="download-button" type="button">↓ Stáhnout do PC</button>
+      <input id="upload-picker" type="file" multiple hidden aria-label="Vybrat soubory k nahrání">
+      <span class="command-help">Označení: <kbd>Ctrl</kbd> + klik, <kbd>Shift</kbd> + klik, <kbd>Mezerník</kbd> · <kbd>Esc</kbd> Zrušit označení</span>
+    </div>
+    <div class="job-bar" id="job-bar" hidden role="status" aria-live="polite">
+      <div class="job-text"><span id="job-label">Pracuji…</span><span id="job-count">—</span></div>
+      <progress id="job-progress" value="0" max="100" aria-label="Průběh operace"></progress>
+    </div>
+    <dialog id="conflict-dialog" aria-labelledby="conflict-heading" aria-describedby="conflict-description">
+      <div class="conflict-box">
+        <h2 id="conflict-heading">Cílová položka už existuje</h2>
+        <p id="conflict-description">Jak chceš vyřešit tento konflikt?</p>
+        <div class="conflict-pair">
+          <div><span class="conflict-caption">Zdroj</span><strong id="conflict-source"></strong><span id="conflict-source-size" class="conflict-size"></span></div>
+          <div><span class="conflict-caption">Existující cíl</span><strong id="conflict-target"></strong><span id="conflict-target-size" class="conflict-size"></span></div>
+        </div>
+        <label class="conflict-apply"><input id="conflict-apply-all" type="checkbox"> Použít pro všechny další konflikty této operace</label>
+        <div class="conflict-buttons">
+          <button type="button" data-conflict-action="overwrite" class="conflict-primary">Přepsat</button>
+          <button type="button" data-conflict-action="skip">Přeskočit</button>
+          <button type="button" data-conflict-action="rename">Přejmenovat cíl</button>
+          <button type="button" data-conflict-action="abort" class="conflict-cancel">Zrušit operaci</button>
+        </div>
+        <p class="conflict-hint">Při kolizi adresářů znamená „Přepsat“ sloučení jejich obsahu; případné konflikty uvnitř se řeší stejným způsobem. Přejmenování se vztahuje jen na právě řešenou položku.</p>
+      </div>
+    </dialog>
+    <dialog id="editor-dialog" aria-labelledby="editor-heading">
+      <div class="editor-box">
+        <div class="editor-top"><div><h2 id="editor-heading">Textový editor</h2><span id="editor-file">—</span></div>
+          <button id="editor-close" type="button" class="editor-close" aria-label="Zavřít editor">✕</button></div>
+        <textarea id="editor-text" spellcheck="false" aria-label="Obsah textového souboru" wrap="off"></textarea>
+        <div class="editor-footer"><span id="editor-info">UTF-8 · maximálně 1 MiB</span>
+          <div class="editor-actions"><button id="editor-cancel" type="button">Zavřít</button>
+            <button id="editor-save" type="button"><kbd>Ctrl</kbd>+<kbd>S</kbd> Uložit</button></div></div>
+      </div>
+    </dialog>
+    <dialog id="preview-dialog" aria-labelledby="preview-heading">
+      <div class="preview-box">
+        <div class="preview-top">
+          <div><h2 id="preview-heading">F3 – Prohlížeč</h2><span id="preview-file">—</span></div>
+          <div class="preview-controls">
+            <button type="button" id="preview-prev" title="Předchozí obrázek">◀</button>
+            <button type="button" id="preview-next" title="Další obrázek">▶</button>
+            <button type="button" id="preview-zoom" title="Přizpůsobit / 1:1">1:1 / Okno</button>
+            <button type="button" id="preview-close" aria-label="Zavřít">✕</button>
+          </div>
+        </div>
+        <div class="preview-main">
+          <div class="preview-content">
+            <img id="preview-image" alt="Náhled vybraného obrázku" hidden>
+            <pre id="preview-text" hidden></pre>
+            <span id="preview-empty">Načítám náhled…</span>
+          </div>
+          <aside id="preview-metadata" class="preview-side">
+            <h3>Generační parametry a metadata</h3>
+            <p id="preview-meta-info">Údaje se zobrazí pouze tehdy, pokud jsou uložené v souboru.</p>
+            <div id="preview-summary" class="preview-summary"></div>
+            <div class="preview-meta-actions">
+              <button type="button" id="preview-copy-prompt">Kopírovat prompt</button>
+              <button type="button" id="preview-copy-seed">Kopírovat seed</button>
+              <button type="button" id="preview-copy-workflow">Kopírovat workflow</button>
+              <button type="button" id="preview-export-workflow">Workflow JSON</button>
+              <button type="button" id="preview-export-all">Export metadat JSON</button>
+            </div>
+            <details id="preview-raw-details"><summary>Původní metadata (beze změn)</summary><div id="preview-raw"></div></details>
+          </aside>
+        </div>
+        <div class="preview-footer"><span id="preview-status">F3 – pouze prohlížení</span><span>← / → další obrázek · Esc zavřít</span></div>
+      </div>
+    </dialog>
+    <footer class="bottom-bar">
+      <div class="keyboard-help"><span><kbd>Tab</kbd> Panel</span><span><kbd>↑</kbd><kbd>↓</kbd> Výběr</span><span><kbd>Enter</kbd> Otevřít</span><span><kbd>Backspace</kbd> Zpět</span><span><kbd>F2–F8</kbd> Operace</span><span><kbd>Shift+F4</kbd> Nový soubor</span><span><kbd>Ctrl</kbd>+<kbd>L</kbd> Cesta</span><span><kbd>Ctrl</kbd>+<kbd>H</kbd> Skryté</span></div>
+      <div class="bottom-right"><label class="toggle" for="hidden"><input type="checkbox" id="hidden"><span>Zobrazit skryté</span></label><span class="version">v0.10</span></div>
+    </footer>
+    <p class="notification" id="notification" role="status" aria-live="polite"></p>
+  </div>
+</body>
+</html>

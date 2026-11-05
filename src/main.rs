@@ -1,25 +1,25 @@
-mod archive;
+pub use salamander_core::archive;
 mod archive_ui;
-mod attrs;
+pub use salamander_core::attrs;
 mod clipboard;
-mod config;
+pub use salamander_core::config;
 mod dialogs;
 mod find;
 mod model;
-mod ops;
+pub use salamander_core::ops;
 mod panel;
 mod places;
 mod props;
-mod remote;
+pub use salamander_core::remote;
 mod remote_ui;
 mod settings;
-mod sodium;
-mod sys;
+pub use salamander_core::sodium;
+pub use salamander_core::sys;
 mod terminal;
-mod vault;
+pub use salamander_core::vault;
 mod viewer;
 mod window;
-mod xattr;
+pub use salamander_core::xattr;
 
 use std::path::PathBuf;
 

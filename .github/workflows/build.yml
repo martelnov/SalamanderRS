@@ -1,0 +1,59 @@
+name: Build Salamander RS (Rust)
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  server:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install native runtime libraries
+        run: sudo apt-get update && sudo apt-get install -y libarchive13t64 libsodium23 openssh-client
+      - name: Test shared backend and headless UI
+        run: cargo test -p salamander-core -p salamander-tui -p salamander-launcher
+      - name: Release build without GTK
+        run: scripts/build-server.sh
+      - name: Smoke test executables
+        run: |
+          ./target/release/salamander --help
+          ./target/release/salamander-rs-tui --help
+          if ldd ./target/release/salamander-rs-tui | grep -E 'libgtk|libgdk|libX11|libwayland|libncurses'; then
+            echo 'Unexpected GUI dependency'; exit 1
+          fi
+      - name: Publish Linux x86-64 server binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: salamander-rs-linux-x86_64-server
+          path: |
+            target/release/salamander
+            target/release/salamander-rs-tui
+            README.md
+            LICENSE
+
+  desktop:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: GTK 4 development headers
+        run: sudo apt-get update && sudo apt-get install -y build-essential pkg-config libgtk-4-dev libarchive13t64 libsodium23 openssh-client
+      - name: Build original GTK interface on shared backend
+        run: cargo check -p salamander-rs
+      - name: Build all three interfaces/launcher
+        run: scripts/build-desktop.sh
+      - name: Publish desktop binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: salamander-rs-linux-x86_64-desktop
+          path: |
+            target/release/salamander
+            target/release/salamander-rs
+            target/release/salamander-rs-tui
+            assets/cz.k4.salamander-rs.desktop
+            assets/salamander-rs.svg
+            LICENSE

@@ -1,23 +1,32 @@
-# Salamander RS
+# Salamander RS — GUI i serverová TUI verze (Rust)
+
+**Nově:** společné jádro `salamander-core`, původní GTK4 aplikace `salamander-rs`,
+terminálová aplikace `salamander-rs-tui` (Ratatui/Crossterm) a automatický
+spouštěč `salamander`. Na server stačí spouštěč + TUI — **bez GTK/X11/Wayland**.
+
+Podrobná serverová instalace, klávesy, omezení první verze a stav ověření:
+**[README_SERVER.md](README_SERVER.md)**.
+
+```bash
+# Server (Rust 1.85+, libarchive.so.13, libsodium.so.23):
+./scripts/build-server.sh
+./target/release/salamander --tui
+
+# Desktop (navíc libgtk-4-dev):
+./scripts/build-desktop.sh
+./target/release/salamander   # automaticky vybere GUI/TUI
+```
+
+---
+
+## Původní grafické rozhraní Salamander RS (GTK4)
+
 
 Dvoupanelový správce souborů pro Linux (GTK 4, Rust) inspirovaný
 [Open Salamanderem](https://github.com/OpenSalamander/salamander). Ovládá se hlavně
 z klávesnice. Jde o nezávislou implementaci, kód Open Salamandera nepřebírá.
 
-Cílí na Ubuntu 24.04 a novější, včetně LXQt (X11 i Wayland), a na AlmaLinux / RHEL 9 a 10
-s GNOME.
-
-## Instalace
-
-Hotové balíčky jsou ke stažení v **[Releases](https://github.com/tondakrap-cmd/SalamanderRS/releases/latest)**:
-
-| Systém | Balíček | Instalace |
-|---|---|---|
-| Ubuntu 24.04+ / Debian | `salamander-rs_<verze>-1_amd64.deb` | `sudo apt install ./salamander-rs_*_amd64.deb` |
-| AlmaLinux / RHEL 9 a 10 | `salamander-rs-<verze>-1.x86_64.rpm` | `sudo dnf install ./salamander-rs-*.x86_64.rpm` |
-
-Závislosti se doinstalují automaticky; RPM nepotřebuje EPEL. Sestavení ze zdrojáků
-popisuje kapitola [Sestavení](#sestavení).
+Cílí na Ubuntu 24.04 a novější, včetně LXQt (X11 i Wayland).
 
 ## Funkce
 
@@ -116,15 +125,16 @@ Na Ubuntu 24.04+ (nebo ve WSL2 s WSLg):
 ```bash
 sudo apt install build-essential pkg-config libgtk-4-dev libarchive13t64 libsodium23 openssh-client
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh   # Rust ≥ 1.85
-cargo test
-cargo run -- ~/Dokumenty        # volitelně adresář pro levý panel
+cargo test -p salamander-core
+cargo run -p salamander-rs -- ~/Dokumenty        # volitelně adresář pro levý panel
 ```
 
 Balíček `.deb`:
 
 ```bash
 cargo install cargo-deb
-cargo deb
+./scripts/build-desktop.sh
+cargo deb --no-build -p salamander-rs
 sudo apt install ./target/debian/salamander-rs_*_amd64.deb
 ```
 
