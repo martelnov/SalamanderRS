@@ -15,6 +15,7 @@ use std::collections::HashSet;
 use std::ffi::CString;
 use std::fs;
 use std::io;
+use std::os::fd::AsRawFd;
 use std::os::unix::ffi::OsStrExt;
 use std::net::{Ipv4Addr, SocketAddrV4};
 use std::path::{Component, Path, PathBuf};
@@ -754,6 +755,68 @@ async fn copy_resolve(
     Ok(([(header::CACHE_CONTROL, "no-store")], Json(json!({"ok":true}))))
 }
 
+/// F7: use a pinned directory descriptor, never a pathname reconstructed
+/// from an earlier canonicalization. openat2 rejects symlink components.
+fn create_directory_beneath(root: &fs::File, relative: &str, name: &str) -> Result<(), ApiError> {
+    if !valid_entry_name(name) {
+        return Err(ApiError::bad_request("Neplatný název adresáře."));
+    }
+    let parent = transfer_http::open_relative_directory(root, relative)?;
+    let name = CString::new(name)
+        .map_err(|_| ApiError::bad_request("Neplatný název adresáře."))?;
+    // SAFETY: the parent is a pinned directory fd and the name is one
+    // validated path component. The creation cannot traverse another path.
+    let result = unsafe { libc::mkdirat(parent.as_raw_fd(), name.as_ptr(), 0o777) };
+    if result < 0 {
+        return Err(transfer_http::io_error("Vytvoření adresáře", io::Error::last_os_error()));
+    }
+    Ok(())
+}
+
+/// F2: both names live under the *same pinned parent directory*. The kernel
+/// checks target nonexistence atomically, including dangling symlinks.
+/// This does not guarantee the selected inode cannot be renamed concurrently
+/// by another process: container and UID isolation are still necessary.
+fn rename_entry_beneath(
+    root: &fs::File, relative: &str, from: &str, to: &str,
+) -> Result<(), ApiError> {
+    if !valid_entry_name(from) || !valid_entry_name(to) {
+        return Err(ApiError::bad_request("Neplatný název položky."));
+    }
+    if from == to {
+        return Err(ApiError::bad_request("Název se nezměnil."));
+    }
+    let parent = transfer_http::open_relative_directory(root, relative)?;
+    let old_name = CString::new(from)
+        .map_err(|_| ApiError::bad_request("Neplatný název položky."))?;
+    let new_name = CString::new(to)
+        .map_err(|_| ApiError::bad_request("Neplatný název položky."))?;
+    // Examine the entry, not the destination of a symlink. The source name
+    // could still change after this check; renameat2 never follows the link.
+    match transfer_http::existing_kind(&parent, &old_name)
+        .map_err(|e| transfer_http::io_error("Kontrola zdroje", e))?
+    {
+        Some(kind) if kind == libc::S_IFREG || kind == libc::S_IFDIR => {}
+        Some(_) => return Err(ApiError::bad_request(
+            "Přejmenovat lze pouze běžný soubor nebo adresář.")),
+        None => return Err(ApiError::not_found("Zdrojová položka již neexistuje.")),
+    }
+    // SAFETY: the names are validated single components; the same directory
+    // descriptor is used for both sides and RENAME_NOREPLACE is atomic.
+    let result = unsafe {
+        libc::syscall(
+            libc::SYS_renameat2,
+            parent.as_raw_fd(), old_name.as_ptr(),
+            parent.as_raw_fd(), new_name.as_ptr(),
+            transfer_http::RENAME_NOREPLACE,
+        )
+    };
+    if result < 0 {
+        return Err(transfer_http::io_error("Přejmenování", io::Error::last_os_error()));
+    }
+    Ok(())
+}
+
 async fn create_directory(
     State(state): State<AppState>, headers: HeaderMap,
     Json(req): Json<DirectoryRequest>,
@@ -761,15 +824,7 @@ async fn create_directory(
     require_write_header(&headers, "mkdir")?;
     let _permit = state.write_permit()?;
     tokio::task::spawn_blocking(move || {
-        if !valid_entry_name(&req.name) {
-            return Err(ApiError::bad_request("Neplatný název adresáře."));
-        }
-        let (dir, _) = resolve_directory(state.root(&req.root)?, &req.path)?;
-        fs::create_dir(dir.join(&req.name))
-            .map_err(|e| if e.kind() == io::ErrorKind::AlreadyExists {
-                ApiError::conflict("Položka s tímto názvem již existuje.")
-            } else { ApiError::bad_request(&format!("Vytvoření adresáře selhalo: {e}")) })?;
-        Ok::<_, ApiError>(())
+        create_directory_beneath(state.root_handle(&req.root)?, &req.path, &req.name)
     }).await.map_err(|_| ApiError::bad_request("Vytvoření adresáře selhalo."))??;
     Ok(([(header::CACHE_CONTROL, "no-store")], Json(json!({"ok": true}))))
 }
@@ -781,21 +836,9 @@ async fn rename_entry(
     require_write_header(&headers, "rename")?;
     let _permit = state.write_permit()?;
     tokio::task::spawn_blocking(move || {
-        if !valid_entry_name(&req.name) || !valid_entry_name(&req.new_name) {
-            return Err(ApiError::bad_request("Neplatný název položky."));
-        }
-        if req.name == req.new_name {
-            return Err(ApiError::bad_request("Název se nezměnil."));
-        }
-        let (paths, dir) = validate_selected_paths(&state, &req.root, &req.path, &[req.name])?;
-        let target = dir.join(&req.new_name);
-        // Do not overwrite even a broken symlink.
-        if fs::symlink_metadata(&target).is_ok() {
-            return Err(ApiError::conflict("Cílová položka již existuje."));
-        }
-        fs::rename(&paths[0], &target)
-            .map_err(|e| ApiError::bad_request(&format!("Přejmenování selhalo: {e}")))?;
-        Ok::<_, ApiError>(())
+        rename_entry_beneath(
+            state.root_handle(&req.root)?, &req.path, &req.name, &req.new_name,
+        )
     }).await.map_err(|_| ApiError::bad_request("Přejmenování selhalo."))??;
     Ok(([(header::CACHE_CONTROL, "no-store")], Json(json!({"ok": true}))))
 }
@@ -1224,6 +1267,48 @@ mod tests {
         assert!(state.write_permit().is_err());
         drop(permit);
         assert!(state.write_permit().is_ok());
+    }
+
+    #[test]
+    fn descriptor_relative_mkdir_and_rename_cannot_escape_or_replace() {
+        let tmp = tempfile::tempdir().unwrap();
+        let data = tmp.path().join("data");
+        let outside = tmp.path().join("outside");
+        fs::create_dir(&data).unwrap();
+        fs::create_dir(&outside).unwrap();
+        let data_fd = fs::File::open(&data).unwrap();
+
+        create_directory_beneath(&data_fd, "", "inside").unwrap();
+        assert!(data.join("inside").is_dir());
+        assert_eq!(create_directory_beneath(&data_fd, "", "inside")
+            .unwrap_err().status, StatusCode::CONFLICT);
+        assert!(create_directory_beneath(&data_fd, "../outside", "escape").is_err());
+        assert!(!outside.join("escape").exists());
+
+        fs::write(data.join("inside/source"), b"source").unwrap();
+        fs::write(data.join("inside/existing"), b"keep").unwrap();
+        assert_eq!(rename_entry_beneath(&data_fd, "inside", "source", "existing")
+            .unwrap_err().status, StatusCode::CONFLICT);
+        assert_eq!(fs::read(data.join("inside/existing")).unwrap(), b"keep");
+        assert_eq!(fs::read(data.join("inside/source")).unwrap(), b"source");
+
+        // A dangling symlink is an existing destination: never replace it.
+        symlink("missing-target", data.join("inside/dangling")).unwrap();
+        assert_eq!(rename_entry_beneath(&data_fd, "inside", "source", "dangling")
+            .unwrap_err().status, StatusCode::CONFLICT);
+        assert!(fs::symlink_metadata(data.join("inside/dangling")).unwrap()
+            .file_type().is_symlink());
+        assert!(rename_entry_beneath(&data_fd, "inside", "dangling", "other").is_err());
+
+        rename_entry_beneath(&data_fd, "inside", "source", "renamed").unwrap();
+        assert_eq!(fs::read(data.join("inside/renamed")).unwrap(), b"source");
+        assert!(!data.join("inside/source").exists());
+
+        // A symlink at any directory component must not redirect writes.
+        symlink(&outside, data.join("outside-link")).unwrap();
+        assert!(create_directory_beneath(&data_fd, "outside-link", "escape").is_err());
+        assert!(rename_entry_beneath(&data_fd, "outside-link", "victim", "moved").is_err());
+        assert!(!outside.join("escape").exists());
     }
 
     #[tokio::test]

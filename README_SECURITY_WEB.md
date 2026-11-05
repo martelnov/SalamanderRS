@@ -1,3 +1,20 @@
+# Security hardening after Web v0.10: F2 and F7
+
+The web F2 (rename) and F7 (create directory) handlers now use a pinned
+DATA/MODELS root directory descriptor and Linux `openat2` to resolve the
+parent directory without following symlink components. F7 uses `mkdirat`;
+F2 uses `renameat2(RENAME_NOREPLACE)` against the same opened parent, so a
+concurrent destination creation cannot be silently overwritten, including
+a dangling symlink. Regression tests cover these properties.
+
+**Remaining work:** F5/F6 copy/move, F8 delete, ZIP processing, directory
+listing and metadata operations still use path-based flows. Races involving
+concurrently replaced source entries are not fully eliminated even for F2.
+This patch does not add authentication, container isolation, CPU/RAM limits
+or quota integration; the application is not production ready.
+
+---
+
 # Security changes in SalamanderRS Web v0.9
 
 Confined writable mode accepts arbitrary canonical DATA/MODELS directories;
