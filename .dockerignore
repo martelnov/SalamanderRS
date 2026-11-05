@@ -1,0 +1,8 @@
+.git
+.gitignore
+target
+**/target
+*.deb
+*.rpm
+*.zip
+*.patch
