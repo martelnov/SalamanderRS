@@ -11,6 +11,7 @@ mod resumable;
 mod preview;
 mod auth;
 mod delete;
+mod safe_copy;
 
 use std::collections::HashSet;
 use std::ffi::CString;

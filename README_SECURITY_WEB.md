@@ -1,3 +1,25 @@
+# F5 hardening — stage 1: descriptor-relative regular-file copy primitive
+
+The web crate now contains `safe_copy::copy_regular_no_replace`, an intentionally
+unwired building block for F5. It reads a regular file through a Linux `openat2`
+file descriptor pinned relative to a trusted source directory and writes a
+private 0600 temporary file through `openat` under the pinned destination
+directory. `renameat2(RENAME_NOREPLACE)` publishes only a complete file and
+cannot replace an existing entry, including a dangling symlink. The routine
+streams with bounded memory, cleans up staging on error/cancellation, and
+preserves ordinary permission bits and timestamps. It rejects symlinks, special
+files, invalid names and self-copy, and checks whether the source changed
+while being copied. This check is best effort, not an immutable snapshot.
+
+**No user-facing behavior changes in this stage.** `/api/copy` still calls
+the pathname-based common core. Directory copy, conflict resolution and
+explicit overwrite must be ported before the new safe-copy worker is wired
+into the HTTP API. F6, ZIP and file listing also need further hardening.
+ACLs, xattrs and special permission bits are not yet copied by this primitive.
+The application remains **UNSAFE for production user data** and has no HTTP
+user authentication in confined mode.
+
+---
 # Security hardening after Web v0.10: F8 deletion
 
 Web F8 now uses pinned directory descriptors, `openat2` and `unlinkat`,
@@ -158,3 +180,26 @@ collect the exact error and kernel information (`uname -r`,
 
 This source was not compiled in the author's assistant environment; compilation
 and runtime checks must be performed on `ailab`. Keep v0.6 as a fallback.
+
+---
+# F5 preparation: descriptor-relative recursive directory copy (stage 2)
+
+The web-only `safe_copy.rs` module now also contains a descriptor-relative
+recursive directory-copy primitive. A copy is assembled under a private
+staging directory inside the destination parent, with Linux `openat2`
+protecting each source directory component and `RENAME_NOREPLACE` publishing
+only a complete tree. The implementation rejects symlinks, special files,
+invalid/non-UTF-8 names, and internal resumable checkpoint entries; it enforces
+limits on depth and total entries. It streams file contents with bounded memory,
+can be interrupted through a progress callback, and attempts cleanup on failure.
+Nested mounted filesystems are allowed by design when made visible to the
+container by AI Platform. Ordinary mode bits and timestamps are preserved;
+ACLs and extended attributes are not yet covered.
+
+**This is an unconnected building block.** `/api/copy` still uses the original
+common-core worker so that F5 conflict prompts, merge/overwrite semantics, and
+UI progress are not silently broken. Do not use this code on real user data yet.
+A future integration must reject copying a directory into its own descendant,
+provide safe overwrite/merge operations, and verify source identity under
+concurrent changes. Failure cleanup is best-effort, not crash-atomic; a process
+crash may leave a private staging directory to be cleaned by an operator.
