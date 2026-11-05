@@ -1,3 +1,23 @@
+# Security hardening after Web v0.10: F8 deletion
+
+Web F8 now uses pinned directory descriptors, `openat2` and `unlinkat`,
+including for recursive deletion. Nested symlinks are unlinked without
+following them; top-level symlinks and special files are rejected, matching
+the earlier selection validation. Descending into nested mountpoints is
+rejected (`RESOLVE_NO_XDEV`). Root path traversal and duplicate selections
+are rejected before any deletion. The recursion has depth and entry-count
+limits and protects hidden resumable-upload checkpoint files. New regression
+tests cover these invariants.
+
+**Important:** Deletion is permanent and is not atomic; a failure in a nested
+directory can leave an incomplete/partially deleted subtree. The safety of
+recursive deletion under another process concurrently renaming directory
+entries is *not* guaranteed (descriptors prevent symlink traversal but cannot
+pin an entry name against replacement). Container isolation and a trusted UID
+boundary are still required. This does not make the web application production
+ready or suitable for untrusted network access.
+
+---
 # Security hardening after Web v0.10: F2 and F7
 
 The web F2 (rename) and F7 (create directory) handlers now use a pinned
@@ -7,7 +27,7 @@ F2 uses `renameat2(RENAME_NOREPLACE)` against the same opened parent, so a
 concurrent destination creation cannot be silently overwritten, including
 a dangling symlink. Regression tests cover these properties.
 
-**Remaining work:** F5/F6 copy/move, F8 delete, ZIP processing, directory
+**Remaining work:** F5/F6 copy/move, ZIP processing, directory
 listing and metadata operations still use path-based flows. Races involving
 concurrently replaced source entries are not fully eliminated even for F2.
 This patch does not add authentication, container isolation, CPU/RAM limits

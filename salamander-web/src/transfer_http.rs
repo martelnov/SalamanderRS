@@ -25,6 +25,7 @@ use tokio_util::io::ReaderStream;
 
 use super::{valid_entry_name, require_write_header, ApiError, AppState};
 
+const RESOLVE_NO_XDEV: u64 = 0x01;
 const RESOLVE_NO_SYMLINKS: u64 = 0x04;
 const RESOLVE_BENEATH: u64 = 0x08;
 pub(super) const RENAME_NOREPLACE: u32 = 1;
@@ -37,10 +38,19 @@ struct OpenHow {
 }
 
 pub(super) fn checked_openat2(parent: RawFd, name: &CStr, flags: i32) -> io::Result<File> {
+    checked_openat2_with_resolve(parent, name, flags, RESOLVE_BENEATH | RESOLVE_NO_SYMLINKS)
+}
+
+pub(super) fn checked_openat2_no_xdev(parent: RawFd, name: &CStr, flags: i32) -> io::Result<File> {
+    checked_openat2_with_resolve(parent, name, flags,
+        RESOLVE_BENEATH | RESOLVE_NO_SYMLINKS | RESOLVE_NO_XDEV)
+}
+
+fn checked_openat2_with_resolve(parent: RawFd, name: &CStr, flags: i32, resolve: u64) -> io::Result<File> {
     let how = OpenHow {
         flags: flags as u64,
         mode: 0,
-        resolve: RESOLVE_BENEATH | RESOLVE_NO_SYMLINKS,
+        resolve,
     };
     // SAFETY: openat2 is invoked with an initialized open_how and a valid
     // NUL-terminated path; a nonnegative result is an owned file descriptor.

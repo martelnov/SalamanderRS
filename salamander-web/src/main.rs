@@ -10,6 +10,7 @@ mod transfer_http;
 mod resumable;
 mod preview;
 mod auth;
+mod delete;
 
 use std::collections::HashSet;
 use std::ffi::CString;
@@ -853,14 +854,14 @@ async fn delete_entries(
     }
     let _permit = state.write_permit()?;
     let (count, errors) = tokio::task::spawn_blocking(move || {
-        let (paths, _) = validate_selected_paths(&state, &req.root, &req.path, &req.names)?;
-        let count = paths.len();
-        Ok::<_, ApiError>((count, ops::delete_permanently(paths)))
+        delete::delete_selected_beneath(
+            state.root_handle(&req.root)?, &req.path, &req.names,
+        )
     }).await.map_err(|_| ApiError::bad_request("Mazání selhalo."))??;
     if !errors.is_empty() {
         return Err(ApiError::bad_request(&format!(
             "Mazání částečně selhalo ({} z {} položek): {}",
-            errors.len(), count, errors[0].error,
+            errors.len(), count, errors[0],
         )));
     }
     Ok(([(header::CACHE_CONTROL, "no-store")], Json(json!({"ok": true, "deleted": count}))))
