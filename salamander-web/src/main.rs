@@ -1205,7 +1205,14 @@ async fn serve(state: AppState, port: u16) -> Result<(), Box<dyn std::error::Err
     if state.unrestricted {
         eprintln!("VAROVÁNÍ: --unrestricted běží s oprávněními procesu a vypíná kernelový sandbox. Nenastavuj veřejný listener/proxy! Pracuj přes SSH tunel.");
     }
-    axum::serve(listener, app).await?;
+    axum::serve(listener, app)
+        .with_graceful_shutdown(async {
+            let mut term =
+                tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+                    .expect("SIGTERM");
+            tokio::select! { _ = term.recv() => {}, _ = tokio::signal::ctrl_c() => {} }
+        })
+        .await?;
     Ok(())
 }
 
